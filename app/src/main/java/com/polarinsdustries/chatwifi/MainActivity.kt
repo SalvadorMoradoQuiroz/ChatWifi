@@ -12,11 +12,11 @@ import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
+import android.util.Log
 import android.view.View
 import android.widget.*
 import android.widget.AdapterView.OnItemClickListener
 import androidx.appcompat.app.AppCompatActivity
-import org.w3c.dom.Text
 import java.io.IOException
 import java.io.InputStream
 import java.io.OutputStream
@@ -37,13 +37,18 @@ class MainActivity : AppCompatActivity() {
     private lateinit var editText_Message: EditText
     private lateinit var imageButton_Send: ImageButton
 
-    private lateinit var manager: WifiP2pManager
-    private lateinit var channel: WifiP2pManager.Channel
+    //private lateinit var manager: WifiP2pManager
+    val manager: WifiP2pManager? by lazy(LazyThreadSafetyMode.NONE) {
+        getSystemService(Context.WIFI_P2P_SERVICE) as WifiP2pManager?
+    }
+
+    //private lateinit var channel: WifiP2pManager.Channel
+    var channel: WifiP2pManager.Channel? = null
 
     private lateinit var receiver: BroadcastReceiver
     private lateinit var intentFilter: IntentFilter
 
-    private var peers: ArrayList<WifiP2pDevice> = ArrayList<WifiP2pDevice>()
+    private val peers = mutableListOf<WifiP2pDevice>()
     private lateinit var deviceNameArray: Array<String>
     private lateinit var deviceArray: Array<WifiP2pDevice>
 
@@ -53,6 +58,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var clientClass: ClientClass
 
     private  var isHost:Boolean = false
+
+    private var device:WifiP2pDevice? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -66,14 +73,20 @@ class MainActivity : AppCompatActivity() {
         editText_Message = findViewById(R.id.editText_Message)
         imageButton_Send = findViewById(R.id.imageButton_Send)
 
-        manager = getSystemService(Context.WIFI_P2P_SERVICE) as WifiP2pManager
-        channel = manager.initialize(this, mainLooper, null)
-        receiver = WifiDirectBroadcastReceiver(manager, channel, this@MainActivity)
+        //manager = getSystemService(Context.WIFI_P2P_SERVICE) as WifiP2pManager
+        Log.e("MANAGER", manager.toString())
+        channel = manager?.initialize(this@MainActivity, mainLooper, null)
+        channel?.also { channel ->
+            receiver = WifiDirectBroadcastReceiver(manager!!, channel, this@MainActivity)
+        }
+        Log.e("CHANNEL", channel.toString())
 
-        intentFilter = IntentFilter()
-        intentFilter.addAction(WifiP2pManager.WIFI_P2P_STATE_CHANGED_ACTION)
-        intentFilter.addAction(WifiP2pManager.WIFI_P2P_PEERS_CHANGED_ACTION)
-        intentFilter.addAction(WifiP2pManager.WIFI_P2P_CONNECTION_CHANGED_ACTION)
+        intentFilter = IntentFilter().apply {
+            addAction(WIFI_P2P_STATE_CHANGED_ACTION)
+            addAction(WIFI_P2P_PEERS_CHANGED_ACTION)
+            addAction(WIFI_P2P_CONNECTION_CHANGED_ACTION)
+            addAction(WIFI_P2P_THIS_DEVICE_CHANGED_ACTION)
+        }
 
         listeners()
     }
@@ -85,12 +98,13 @@ class MainActivity : AppCompatActivity() {
         }
 
         button_Discover.setOnClickListener {
-            manager.discoverPeers(channel, object : WifiP2pManager.ActionListener {
+            manager!!.discoverPeers(channel, object : WifiP2pManager.ActionListener {
                 override fun onSuccess() {
                     textView_Status.text = "Se inicio la busqueda de dispositivos."
                 }
                 override fun onFailure(i: Int) {
                     textView_Status.text = "No se inicio la busqueda de dispositivos."
+                    Toast.makeText(applicationContext, "Revisa que la ubicación este activada.", Toast.LENGTH_SHORT).show()
                 }
             })
         }
@@ -102,12 +116,12 @@ class MainActivity : AppCompatActivity() {
                 position: Int,
                 id: Long
             ) {
-                val device:WifiP2pDevice = deviceArray[position]
+                device = deviceArray[position]
                 var config:WifiP2pConfig = WifiP2pConfig()
-                config.deviceAddress = device.deviceAddress
-                manager.connect(channel, config, object:WifiP2pManager.ActionListener{
+                config.deviceAddress = device!!.deviceAddress
+                manager!!.connect(channel, config, object:WifiP2pManager.ActionListener{
                     override fun onSuccess() {
-                        textView_Status.text = "Conectado a ${device.deviceAddress}"
+                        textView_Status.text = "Conectado a ${device!!.deviceAddress}"
                     }
 
                     override fun onFailure(p0: Int) {
@@ -118,40 +132,51 @@ class MainActivity : AppCompatActivity() {
         })
 
         imageButton_Send.setOnClickListener{
-            var executor: ExecutorService = Executors.newSingleThreadExecutor()
-            var msg:String = editText_Message.text.toString()
-            executor.execute(Runnable {
-                if(msg!=null && isHost){
-                    serverClass.write(msg.toByteArray())
-                }else if(msg!=null && !isHost){
-                    clientClass.write(msg.toByteArray())
-                }
-            })
+            if(device!=null){
+                var executor: ExecutorService = Executors.newSingleThreadExecutor()
+                var msg:String = editText_Message.text.toString()
+                executor.execute(Runnable {
+                    if(msg!=null && isHost){
+                        serverClass.write(msg.toByteArray())
+                    }else if(msg!=null && !isHost){
+                        clientClass.write(msg.toByteArray())
+                    }
+                })
+            }else{
+                Toast.makeText(applicationContext, "Primero se debe buscar y elegir un dispositivo.", Toast.LENGTH_SHORT).show()
+            }
         }
     }
 
-    var peerListListener =
-        PeerListListener { wifiP2pDeviceList ->
-            if (wifiP2pDeviceList != peers) {
-                peers.clear()
-                peers.addAll(wifiP2pDeviceList.deviceList)
-                deviceNameArray =  Array(wifiP2pDeviceList.deviceList.size) {""}
-                deviceArray = Array(wifiP2pDeviceList.deviceList.size) {WifiP2pDevice()}
+    val peerListListener = WifiP2pManager.PeerListListener { peerList ->
+        val refreshedPeers = peerList.deviceList
+        if (refreshedPeers != peers) {
+            peers.clear()
+            peers.addAll(refreshedPeers)
 
-                var index:Int = 0
-                for(device:WifiP2pDevice in wifiP2pDeviceList.deviceList){
-                    deviceNameArray[index] = device.deviceName
-                    deviceArray[index] = device
-                    index++
-                }
+            deviceNameArray =  Array(peerList.deviceList.size) {""}
+            deviceArray = Array(peerList.deviceList.size) {WifiP2pDevice()}
 
-                var adapter:ArrayAdapter<String> = ArrayAdapter(this@MainActivity, android.R.layout.simple_list_item_1, deviceNameArray)
-                if(peers.size == 0){
-                    textView_Status.text = "No se encontraron dispositivos."
-                    return@PeerListListener
-                }
+            Log.e("SIZE DEVICES", peerList.deviceList.size.toString())
+
+            var index:Int = 0
+            for(device:WifiP2pDevice in peerList.deviceList){
+                deviceNameArray[index] = device.deviceName
+                deviceArray[index] = device
+                index++
+                Log.e("DEVICE", device.deviceName)
             }
+
+            var adapter:ArrayAdapter<String> = ArrayAdapter(this@MainActivity, android.R.layout.simple_list_item_1, deviceNameArray)
+            listView_Devices.adapter = adapter
+            adapter.notifyDataSetChanged()
         }
+
+        if (peers.isEmpty()) {
+            textView_Status.text = "No se encontraron dispositivos."
+            return@PeerListListener
+        }
+    }
 
     var connectionInfoListener = ConnectionInfoListener {
         val groupOwnerAddress : InetAddress = it.groupOwnerAddress
@@ -171,12 +196,18 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
-        registerReceiver(receiver, intentFilter)
+        //registerReceiver(receiver, intentFilter)
+        receiver?.also { receiver ->
+            registerReceiver(receiver, intentFilter)
+        }
     }
 
     override fun onPause() {
         super.onPause()
-        unregisterReceiver(receiver)
+        //unregisterReceiver(receiver)
+        receiver?.also { receiver ->
+            unregisterReceiver(receiver)
+        }
     }
 
     inner class ClientClass : Thread {
@@ -281,5 +312,4 @@ class MainActivity : AppCompatActivity() {
             }
         }
     }
-
 }

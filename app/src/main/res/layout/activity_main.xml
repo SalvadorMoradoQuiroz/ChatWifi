@@ -10,12 +10,12 @@
     <TextView
         android:id="@+id/textView_Status"
         android:layout_width="match_parent"
-        android:layout_height="50dp"
+        android:layout_height="wrap_content"
         android:background="#00C853"
         android:gravity="center"
         android:text="@string/estado"
         android:textAlignment="center"
-        android:textSize="20sp" />
+        android:textSize="14sp" />
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -47,20 +47,19 @@
     <ListView
         android:id="@+id/listView_Devices"
         android:layout_width="match_parent"
-        android:layout_height="300dp"
+        android:layout_height="125dp"
         android:layout_marginLeft="10dp"
-        android:layout_marginRight="10dp">
-    </ListView>
+        android:layout_marginRight="10dp"></ListView>
 
     <TextView
         android:id="@+id/textView_Messages"
         android:layout_width="match_parent"
-        android:layout_height="100dp"
+        android:layout_height="75dp"
         android:layout_marginLeft="10dp"
         android:layout_marginTop="20dp"
         android:layout_marginRight="10dp"
-        android:layout_marginBottom="30dp"
-        android:text="@string/hola">
+        android:layout_marginBottom="10dp"
+        android:text="Mensaje">
 
     </TextView>
 
