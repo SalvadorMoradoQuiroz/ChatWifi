@@ -1,0 +1,9 @@
+<resources>
+    <string name="app_name">ChatWifi</string>
+    <string name="estado">Estado</string>
+    <string name="buscar_dispositivos">Buscar Dispositivos</string>
+    <string name="hola">Hola</string>
+    <string name="mensaje">Mensaje</string>
+    <string name="buttonsend">ButtonSend</string>
+    <string name="on_off">On/Off</string>
+</resources>
