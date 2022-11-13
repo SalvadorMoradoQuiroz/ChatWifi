@@ -40,6 +40,7 @@ class WifiDirectBroadcastReceiver(private val manager: WifiP2pManager, private v
                         manager.requestConnectionInfo(channel, activity.connectionInfoListener)
                     }else{
                         activity.textView_Status.text = "No conectado"
+                        activity.connection = false
                     }
                 }
             }

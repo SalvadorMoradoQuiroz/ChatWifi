@@ -61,6 +61,8 @@ class MainActivity : AppCompatActivity() {
 
     private var device:WifiP2pDevice? = null
 
+    var connection:Boolean = false
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
@@ -75,6 +77,7 @@ class MainActivity : AppCompatActivity() {
 
         //manager = getSystemService(Context.WIFI_P2P_SERVICE) as WifiP2pManager
         Log.e("MANAGER", manager.toString())
+
         channel = manager?.initialize(this@MainActivity, mainLooper, null)
         channel?.also { channel ->
             receiver = WifiDirectBroadcastReceiver(manager!!, channel, this@MainActivity)
@@ -104,7 +107,7 @@ class MainActivity : AppCompatActivity() {
                 }
                 override fun onFailure(i: Int) {
                     textView_Status.text = "No se inicio la busqueda de dispositivos."
-                    Toast.makeText(applicationContext, "Revisa que la ubicación este activada.", Toast.LENGTH_SHORT).show()
+                    Toast.makeText(applicationContext, "Revisa que la ubicación y wifi esten activados.", Toast.LENGTH_SHORT).show()
                 }
             })
         }
@@ -122,19 +125,22 @@ class MainActivity : AppCompatActivity() {
                 manager!!.connect(channel, config, object:WifiP2pManager.ActionListener{
                     override fun onSuccess() {
                         textView_Status.text = "Conectado a ${device!!.deviceAddress}"
+                        connection = true
                     }
 
                     override fun onFailure(p0: Int) {
                         textView_Status.text = "No conectado"
+                        connection = false
                     }
                 })
             }
         })
 
         imageButton_Send.setOnClickListener{
-            if(device!=null){
+            if(connection){
                 var executor: ExecutorService = Executors.newSingleThreadExecutor()
                 var msg:String = editText_Message.text.toString()
+                editText_Message.setText("")
                 executor.execute(Runnable {
                     if(msg!=null && isHost){
                         serverClass.write(msg.toByteArray())
@@ -143,7 +149,7 @@ class MainActivity : AppCompatActivity() {
                     }
                 })
             }else{
-                Toast.makeText(applicationContext, "Primero se debe buscar y elegir un dispositivo.", Toast.LENGTH_SHORT).show()
+                Toast.makeText(applicationContext, "Se debe establecer una conexión primero.", Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -185,12 +191,13 @@ class MainActivity : AppCompatActivity() {
             isHost = true
             serverClass = ServerClass()
             serverClass.start()
+            connection = true
         }else if(it.groupFormed){
             textView_Status.text = "Client"
             isHost = false
             clientClass = ClientClass(groupOwnerAddress)
             clientClass.start()
-
+            connection = true
         }
     }
 
@@ -239,20 +246,20 @@ class MainActivity : AppCompatActivity() {
                 e.printStackTrace()
             }
 
-            var executor: ExecutorService = Executors.newSingleThreadExecutor()
-            var handler: Handler = Handler(Looper.getMainLooper())
+            val executor: ExecutorService = Executors.newSingleThreadExecutor()
+            val handler: Handler = Handler(Looper.getMainLooper())
 
             executor.execute {
-                val buffer = ByteArray(1024)
+                var buffer = ByteArray(1024)
                 var bytes: Int
                 while (socket != null) {
                     try {
                         bytes = inputStream!!.read(buffer)
                         if (bytes > 0) {
-                            val finalBytes = bytes
+                            var finalBytes = bytes
 
                             handler.post {
-                                val tempMSG: String = String(buffer, 0, finalBytes)
+                                var tempMSG: String = String(buffer, 0, finalBytes)
                                 textView_Messages.text = tempMSG
                             }
                         }
@@ -292,13 +299,13 @@ class MainActivity : AppCompatActivity() {
             val handler = Handler(Looper.getMainLooper())
 
             executor.execute {
-                val buffer = ByteArray(1024)
+                var buffer = ByteArray(1024)
                 var bytes: Int
                 while (socket != null) {
                     try {
                         bytes = inputStream!!.read(buffer)
                         if (bytes > 0) {
-                            val finalBytes = bytes
+                            var finalBytes = bytes
 
                             handler.post {
                                 val tempMSG: String = String(buffer, 0, finalBytes)
